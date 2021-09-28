@@ -1,0 +1,13 @@
+/.env
+/.venv/
+/.vscode/
+/recordings/
+/dist/
+/build/
+
+*.egg-info/
+pyproject.toml
+*.log
+*.cue
+*.mp[34]
+*.db
