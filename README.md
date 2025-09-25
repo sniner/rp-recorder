@@ -1,94 +1,115 @@
-# Shoutcast/Radio Paradise stream recording
+# Radio Paradise Stream Recording and Playlist Tracking
 
-These are my tools for tracking [Radio Paradise][1] playlist and recording
-audio streams. I created them for my own purposes, but if they are useful to
-you, feel free to use them. The recording tool should work with other
-Shoutcast streams, but the rest is RP-specific.
+These are my personal tools for recording [Radio Paradise][1] audio streams and
+tracking their playlists. I originally built them for myself, but if they’re
+useful to you, feel free to use them.
 
-If you like Radio Paradise as much as I do, consider making a donation to
-them, they deserve it ;-)
+The recording tool should also work with other Shoutcast streams, but the
+playlist tracking is Radio Paradise–specific.
 
-## Installing
+If you enjoy Radio Paradise as much as I do, please consider donating to
+support them. They truly deserve it.
 
-Build the wheel package file with `pipenv`:
+## Installation
 
-```console
-$ cd rp-recorder
-$ pipenv install
-$ pipenv run python setup.py bdist_wheel
-```
-
-Afterwards, inside of folder `dist` you will find the `.whl` file which you
-can install with `pip`.
-
-## CLI `rp-record`
-
-Example YAML configuration file `rp.yaml`:
-
-```yaml
-- name: "RP Main Mix"
-  url: "https://stream.radioparadise.com/aac-320"
-  type: "mp4"
-  cuesheet: true
-  tracklist: false
-```
-
-Record one hour of RP main mix into folder `record`:
+Build the wheel package with `uv`:
 
 ```console
-$ rp-record --config rp.yaml --duration 3600 --output record
+$ uv sync
+$ uv build
 ```
 
-## CLI `rp-track`
+Afterwards, the `dist` directory will contain a `.whl` file that you can
+install with `pip`.
 
-If you are not interested in the music, but only in the played tracks, you
-don't need to waste bandwidth on the audio stream. Just track the played
-titles via their API.
+> **Note:** Python packaging and installation can be a mess, depending on your
+> system. Please avoid polluting your system’s Python installation with `pip`.
+> Instead, either use the provided Docker container or run it directly with
+> `uv run ...`.
 
-With `rp-track` only the playlists of Radio Paradise are tracked and written
-to a SQLite3 database.
+Copy the sample configuration file `radioparadise.toml.sample` to
+`radioparadise.toml` (or rename it) and adjust the settings as needed.
+
+### Using the Docker container
+
+*(to be documented)*
+
+## CLI: `rp-record`
+
+The recorder requires a `[recording]` section and at least one `[[streams]]`
+entry in your configuration file.
+
+- `streams.url`: Shoutcast stream URL
+- `streams.type`: appropriate file extension, e.g. `m4a` (AAC), `mp3` (MP3)
+  or `flac` (FLAC)
+- `streams.cuesheet`: set to `true` to generate a cuesheet
+- `streams.tracklist`: set to `true` to generate a plain text track list with
+  time offsets
+- `recording.output`: output directory path
+- `recording.cuesheet`: default value for `streams.cuesheet`
+- `recording.tracklist`: default value for `streams.tracklist`
+
+Example: record one hour of the main RP mix:
 
 ```console
-$ rp-track
+$ uv run rp-record --config rp.toml --duration 3600
 ```
 
-There is also no frontend for the recorded tracks, you have to access the
-database directly and query it with SQL. For example, to view the titles
-played on all channels of RP, use this SQL statement:
+## CLI: `rp-track`
+
+If you only care about the playlist and not the audio, you can just track
+the played titles via the RP API and save bandwidth.
+
+`rp-track` writes the playlists into a SQLite3 database.
+
+Required configuration entries:
+
+- `tracking.url`: Radio Paradise API URL
+- `tracking.contact`: contact string used in API requests (don’t use your
+  email address unless you’re comfortable exposing it)
+- `tracking.database`: SQLite database path
+
+Example: track all configured channels until interrupted with `Ctrl-C`:
+
+```console
+$ uv run rp-track --config rp.toml
+```
+
+There’s no dedicated CLI for querying the database. Use your preferred
+SQLite3 browser and inspect the tables or views.
+
+Example SQL query:
 
 ```sql
 SELECT
-pl.time,
-ch.name,
-tr.artist,
-tr.title,
-tr.album,
-tr.year,
-tr.cover
+  pl.time,
+  ch.name,
+  tr.artist,
+  tr.title,
+  tr.album,
+  tr.year,
+  tr.cover
 FROM playlists AS pl
-JOIN channels AS ch ON ch.channel=pl.channel
-JOIN tracks AS tr ON tr.track=pl.track
-ORDER BY pl.time
+JOIN channels AS ch ON ch.channel = pl.channel
+JOIN tracks   AS tr ON tr.track   = pl.track
+ORDER BY pl.time;
 ```
 
-## Cuesheet
+## Cuesheets
 
-For audio recordings, you can have a cuesheet or track list generated. The
-time stamps are not really exact, because they refer to the stream, not to the
-audio playback. To improve this it would be necessary to decode and evaluate
-the audio data format.
+For audio recordings, you can optionally generate a cuesheet or track list.
+Note that timestamps are only as accurate as the stream metadata — not exact
+audio positions. Improving this would require decoding and analyzing the audio
+data itself.
 
-The cuesheet has another peculiarity: the cuesheet standard allows only
-a maximum of 99 tracks. This is quite sufficient for audio media such as CDs,
-but for a stream recording you reach the limit quite easily. I am not aware of
-how playback programs react when more than 99 tracks are included. A possible
-alternative is to have several cuesheets in the same file, each with a maximum
-of 99 tracks, but all pointing to the same audio file. Currently I have
-implemented it exactly like this.
+One peculiarity: the cuesheet standard supports at most 99 tracks. That’s fine
+for CD-like media, but long stream recordings can easily exceed this limit.
+Behavior depends on the playback program. As a workaround, this tool writes
+multiple cuesheets within the same file, each capped at 99 tracks but all
+pointing to the same audio file.
 
 ## License
 
-Released under 2-clause BSD license.
-
+Released under the 2-clause BSD license.
 
 [1]: https://radioparadise.com/

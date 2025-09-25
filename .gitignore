@@ -5,9 +5,10 @@
 /dist/
 /build/
 
+__pycache__/
 *.egg-info/
-pyproject.toml
+
 *.log
 *.cue
 *.mp[34]
-*.db
+*.db*

@@ -1,0 +1,38 @@
+[project]
+name = "rp-recorder"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "urllib3",
+    "requests",
+]
+description = "Logs tracks played on Radio Paradise channels and optionally records the audio streams"
+readme = "README.md"
+authors = [
+    {name = "Stefan Schönberger", email = "stefan@sniner.dev"},
+]
+classifiers = [
+    "Operating System :: OS Independent",
+]
+
+[tool.uv]
+package = true
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+
+[tool.pyright]
+typeCheckingMode = "standard"
+venvPath = "."
+venv = ".venv"
+
+[dependency-groups]
+dev = [
+    "freezegun>=1.5.5",
+    "pytest>=8.4.2",
+]
+
+[project.scripts]
+rp-record = "rprecorder.cli.record:main"
+rp-track = "rprecorder.cli.track:main"
