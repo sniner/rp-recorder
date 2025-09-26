@@ -4,7 +4,6 @@ import argparse
 import logging
 import pathlib
 import signal
-import sys
 import threading
 
 from rprecorder import config, tracker, utils

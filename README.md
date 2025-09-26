@@ -48,6 +48,10 @@ entry in your configuration file.
 - `recording.output`: output directory path
 - `recording.cuesheet`: default value for `streams.cuesheet`
 - `recording.tracklist`: default value for `streams.tracklist`
+- `recording.start_mode`: skip partial tracks (`on-track`) or start recording
+  immediately (`immediate`)
+- `recording.stop_mode`: same values as for `start_mode`, but affects how the
+  recording will end: strictly at the requested time or when the track ends
 
 Example: record one hour of the main RP mix:
 
@@ -101,8 +105,7 @@ ORDER BY pl.time;
 
 For audio recordings, you can optionally generate a cuesheet or track list.
 Note that timestamps are only as accurate as the stream metadata — not exact
-audio positions. Improving this would require decoding and analyzing the audio
-data itself.
+audio positions.
 
 One peculiarity: the cuesheet standard supports at most 99 tracks. That’s fine
 for CD-like media, but long stream recordings can easily exceed this limit.

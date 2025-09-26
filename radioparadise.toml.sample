@@ -24,6 +24,8 @@ timezone = "Europe/Berlin"
 output = "./recordings"
 cuesheet = true
 tracklist = true
+start_mode = "on-track"
+stop_mode = "on-track"
 
 [[streams]]
 channel = 0
@@ -45,6 +47,5 @@ type = "mp4"
 
 # [[streams]]
 # channel = 3
-# name = "RP World/Etc Mix"
 # url = "https://stream.radioparadise.com/world-etc-320"
 # type = "mp4"

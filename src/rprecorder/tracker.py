@@ -1,17 +1,14 @@
 from __future__ import annotations
 
-import json
 import logging
 import pathlib
 import sqlite3
-import sys
-import time
 import threading
 
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone, tzinfo
-from typing import Any, Generator, Iterable, Mapping, NotRequired, Sequence, TypedDict
+from typing import Any, Generator, Mapping, Sequence
 
 from rprecorder import config
 

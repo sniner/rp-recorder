@@ -43,7 +43,7 @@ class CueSheet:
         return item
 
     def _track_entry(
-        self, filepos: int, timepos: timedelta, meta: dict[str, str]
+        self, filepos: int, timepos: timedelta, track: str, cover_url: str
     ) -> str:
         if self.track_no > 99:
             self.track_no = 1
@@ -51,13 +51,10 @@ class CueSheet:
         else:
             prefix = ""
         try:
-            performer, title = re.split(
-                r"\s+-\s+", meta.get("streamtitle", ""), maxsplit=1
-            )
+            performer, title = re.split(r"\s+-\s+", track, maxsplit=1)
         except ValueError:
             performer = ""
-            title = meta.get("streamtitle", "")
-        cover = meta.get("streamurl", "")
+            title = track
         item = "\n".join(
             [
                 f"  TRACK {self.track_no:02d} AUDIO",
@@ -65,7 +62,7 @@ class CueSheet:
                 f'    PERFORMER "{performer}"',
                 f"    INDEX 01 {self._time(timepos)}",
                 f"    REM FILEPOS {filepos}",
-                f'    REM COVER "{cover}"',
+                f'    REM COVER "{cover_url}"',
             ]
         )
         if self.track_no == 1:
@@ -73,8 +70,10 @@ class CueSheet:
         self.track_no += 1
         return item
 
-    def add_track(self, filepos: int, timepos: timedelta, meta: dict[str, str]) -> str:
-        entry = self._track_entry(filepos, timepos, meta)
+    def add_track(
+        self, filepos: int, timepos: timedelta, track: str, cover_url: str
+    ) -> str:
+        entry = self._track_entry(filepos, timepos, track, cover_url)
         if self.path:
             with open(self.path, "a") as f:
                 print(entry, file=f)

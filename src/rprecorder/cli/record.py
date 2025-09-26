@@ -5,7 +5,6 @@ import logging
 import pathlib
 import threading
 
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from rprecorder import config, recorder, utils
@@ -63,8 +62,12 @@ def main():
             end_time = start_time + timedelta(seconds=args.duration or 60)
         log.info("Recording until %s into %r", end_time, str(output_dir.absolute()))
 
-        recorders = recorder.create(conf.streams, output_dir, end_time)
-        threads = [threading.Thread(target=r.record, daemon=True) for r in recorders]
+        recorders = recorder.create(conf.recording, conf.streams, output_dir)
+        params = (end_time,)
+        threads = [
+            threading.Thread(target=r.record, args=params, daemon=True)
+            for r in recorders
+        ]
         for t in threads:
             t.start()
         for t in threads:

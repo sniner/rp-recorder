@@ -9,6 +9,7 @@ from datetime import tzinfo
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from rprecorder import recorder
 
 DEFAULT_CONFIG_FILE = "radioparadise.toml"
 DEFAULT_RECORDINGS_DIR = "./recordings"
@@ -39,6 +40,8 @@ class RecordingCfg:
     output: pathlib.Path
     cuesheet: bool = False
     tracklist: bool = True
+    start_mode: recorder.CutMode = recorder.CutMode.IMMEDIATE
+    stop_mode: recorder.CutMode = recorder.CutMode.IMMEDIATE
 
 
 @dataclass
@@ -82,6 +85,12 @@ def load_config(path: str | pathlib.Path) -> AppConfig:
         output=pathlib.Path(rec_raw.get("output", DEFAULT_RECORDINGS_DIR)),
         cuesheet=bool(rec_raw.get("cuesheet", False)),
         tracklist=bool(rec_raw.get("tracklist", True)),
+        start_mode=recorder.CutMode(
+            rec_raw.get("start_mode") or recorder.CutMode.IMMEDIATE.name
+        ),
+        stop_mode=recorder.CutMode(
+            rec_raw.get("stop_mode") or recorder.CutMode.IMMEDIATE.name
+        ),
     )
     st_raw = data.get("streams", [])
     streams: list[StreamCfg] = []
