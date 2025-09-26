@@ -10,7 +10,7 @@ import threading
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, tzinfo
 from typing import Any, Generator, Iterable, Mapping, NotRequired, Sequence, TypedDict
 
 from rprecorder import config
@@ -30,9 +30,15 @@ Params = Sequence[Any] | Mapping[str, Any]
 
 
 class RPTrackDatabase:
-    def __init__(self, path: pathlib.Path, channels: Sequence[config.ChannelCfg] = ()):
+    def __init__(
+        self,
+        path: pathlib.Path,
+        channels: Sequence[config.ChannelCfg] = (),
+        tz: tzinfo | None = None,
+    ):
         self.path = path
         self.channels = channels
+        self._timezone = tz or timezone.utc
         self._connection: sqlite3.Connection | None = None
         self._lock: threading.Lock = threading.Lock()
 
@@ -220,7 +226,7 @@ class RPTrackDatabase:
             self._exec(
                 "INSERT OR IGNORE INTO playlists(time, channel, track) VALUES (?, ?, ?)",
                 (
-                    datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    datetime.now(self._timezone).isoformat(timespec="seconds"),
                     channel,
                     track,
                 ),
@@ -396,5 +402,5 @@ def create(
     conf: config.TrackingCfg,
     channels: Sequence[config.ChannelCfg],
 ) -> list[RPTrackRecorder]:
-    db = RPTrackDatabase(pathlib.Path(conf.database), channels)
+    db = RPTrackDatabase(pathlib.Path(conf.database), channels, conf.timezone)
     return [RPTrackRecorder(db, channel.id) for channel in channels]

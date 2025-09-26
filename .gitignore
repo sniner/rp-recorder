@@ -12,3 +12,4 @@ __pycache__/
 *.cue
 *.mp[34]
 *.db*
+radioparadise.toml

@@ -18,6 +18,7 @@ name = "World/Etc"
 url = "https://api.radioparadise.com/api/now_playing?chan=%s"
 contact = "your-email@example.com"
 database = "./rp_tracks.db"
+timezone = "Europe/Berlin"
 
 [recording]
 output = "./recordings"

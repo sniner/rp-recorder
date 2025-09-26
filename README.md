@@ -68,6 +68,8 @@ Required configuration entries:
 - `tracking.contact`: contact string used in API requests (don’t use your
   email address unless you’re comfortable exposing it)
 - `tracking.database`: SQLite database path
+- `tracking.timezone`: Timezone (e.g. `Europe/Berlin`) used in database
+  entries or UTC if missing
 
 Example: track all configured channels until interrupted with `Ctrl-C`:
 

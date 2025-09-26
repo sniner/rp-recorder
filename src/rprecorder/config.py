@@ -5,13 +5,16 @@ import pathlib
 import tomllib
 
 from dataclasses import dataclass
+from datetime import tzinfo
 from typing import Any
+from zoneinfo import ZoneInfo
 
 
 DEFAULT_CONFIG_FILE = "radioparadise.toml"
 DEFAULT_RECORDINGS_DIR = "./recordings"
 DEFAULT_DATABASE_PATH = "./rp-tracks.db"
 DEFAULT_CONTACT = "contact@example.com"
+DEFAULT_TIMEZONE = "UTC"
 
 
 log = logging.getLogger(__name__)
@@ -28,6 +31,7 @@ class TrackingCfg:
     url: str  # e.g. "https://...now_playing?chan=%s" oder "...?chan={chan}"
     contact: str  # for User-Agent
     database: pathlib.Path  # SQLite database path
+    timezone: tzinfo
 
 
 @dataclass
@@ -71,6 +75,7 @@ def load_config(path: str | pathlib.Path) -> AppConfig:
         url=_coerce_url_template(tr_raw["url"]),
         contact=tr_raw.get("contact", DEFAULT_CONTACT),
         database=pathlib.Path(tr_raw.get("database", DEFAULT_DATABASE_PATH)),
+        timezone=ZoneInfo(tr_raw.get("timezone") or DEFAULT_TIMEZONE),
     )
     rec_raw = data.get("recording", {})
     rec = RecordingCfg(
