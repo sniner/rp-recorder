@@ -40,6 +40,7 @@ class RecordingCfg:
     output: pathlib.Path
     cuesheet: bool = False
     tracklist: bool = True
+    matroska: bool = True
     start_mode: recorder.CutMode = recorder.CutMode.IMMEDIATE
     stop_mode: recorder.CutMode = recorder.CutMode.IMMEDIATE
 
@@ -85,6 +86,7 @@ def load_config(path: str | pathlib.Path) -> AppConfig:
         output=pathlib.Path(rec_raw.get("output", DEFAULT_RECORDINGS_DIR)),
         cuesheet=bool(rec_raw.get("cuesheet", False)),
         tracklist=bool(rec_raw.get("tracklist", True)),
+        matroska=bool(rec_raw.get("matroska", True)),
         start_mode=recorder.CutMode(
             rec_raw.get("start_mode") or recorder.CutMode.IMMEDIATE.name
         ),

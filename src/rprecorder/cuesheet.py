@@ -4,7 +4,7 @@ import logging
 import pathlib
 import re
 
-from datetime import timedelta, time
+from datetime import timedelta
 
 
 log = logging.getLogger(__name__)
@@ -14,24 +14,27 @@ class CueSheet:
     def __init__(
         self,
         performer: str,
+        audiofilename: str,
         path: str | pathlib.Path,
     ):
         self.performer: str = performer
+        self.filename: str = audiofilename
         self.path: pathlib.Path = pathlib.Path(path)
-        self.filename: str = self.path.stem
         self.track_no: int = 1
 
     @staticmethod
-    def _time(timepos: time | timedelta):
-        if isinstance(timepos, timedelta):
-            s = int(timepos.total_seconds())
-            ms = timepos.microseconds / 1000
-            frame = int(ms / 75)
-            return f"{s // 60:02d}:{s - 60 * (s // 60):02d}:{frame:02d}"
+    def _time(pos: float | timedelta) -> str:
+        if isinstance(pos, timedelta):
+            total_frames = (pos.days * 86400 + pos.seconds) * 75 + (
+                pos.microseconds * 75
+            ) // 1_000_000
         else:
-            ms = timepos.microsecond / 1000
-            frame = int(ms / 75)
-            return f"{timepos.hour * 60 + timepos.minute:02d}:{timepos.second:02d}:{frame:02d}"
+            total_frames = int(pos * 75)
+
+        mm = total_frames // (75 * 60)
+        ss = (total_frames // 75) % 60
+        ff = total_frames % 75
+        return f"{mm:02d}:{ss:02d}:{ff:02d}"
 
     def _header(self):
         item = "\n".join(
@@ -43,7 +46,7 @@ class CueSheet:
         return item
 
     def _track_entry(
-        self, filepos: int, timepos: timedelta, track: str, cover_url: str
+        self, filepos: int, timepos: float, track: str, cover_url: str
     ) -> str:
         if self.track_no > 99:
             self.track_no = 1
@@ -71,7 +74,7 @@ class CueSheet:
         return item
 
     def add_track(
-        self, filepos: int, timepos: timedelta, track: str, cover_url: str
+        self, filepos: int, timepos: float, track: str, cover_url: str
     ) -> str:
         entry = self._track_entry(filepos, timepos, track, cover_url)
         if self.path:

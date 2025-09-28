@@ -24,28 +24,29 @@ timezone = "Europe/Berlin"
 output = "./recordings"
 cuesheet = true
 tracklist = true
+matroska = true
 start_mode = "on-track"
 stop_mode = "on-track"
 
 [[streams]]
 channel = 0
 url = "https://stream.radioparadise.com/aac-320"
-type = "mp4"
+type = "aac"
 
 # [[streams]]
 # channel = 1
 # url = "https://stream.radioparadise.com/mellow-320"
-# type = "mp4"
+# type = "aac"
 # cuesheet = false
 
 # [[streams]]
 # channel = 2
 # url = "https://stream.radioparadise.com/rock-320"
-# type = "mp4"
+# type = "aac"
 # cuesheet = false
 # tracklist = false
 
 # [[streams]]
 # channel = 3
 # url = "https://stream.radioparadise.com/world-etc-320"
-# type = "mp4"
+# type = "aac"

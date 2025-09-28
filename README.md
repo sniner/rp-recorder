@@ -40,14 +40,16 @@ The recorder requires a `[recording]` section and at least one `[[streams]]`
 entry in your configuration file.
 
 - `streams.url`: Shoutcast stream URL
-- `streams.type`: appropriate file extension, e.g. `m4a` (AAC), `mp3` (MP3)
-  or `flac` (FLAC)
+- `streams.type`: appropriate file extension, e.g. `aac`, `mp3` or `flac`
 - `streams.cuesheet`: set to `true` to generate a cuesheet
 - `streams.tracklist`: set to `true` to generate a plain text track list with
   time offsets
 - `recording.output`: output directory path
 - `recording.cuesheet`: default value for `streams.cuesheet`
 - `recording.tracklist`: default value for `streams.tracklist`
+- `recording.matroska`: set to true to wrap the final audio recording into a
+  Matroska container (`.mka`/`.mkv`) after the session ends (**not yet
+  implemented**)
 - `recording.start_mode`: skip partial tracks (`on-track`) or start recording
   immediately (`immediate`)
 - `recording.stop_mode`: same values as for `start_mode`, but affects how the
@@ -105,12 +107,13 @@ ORDER BY pl.time;
 
 For audio recordings, you can optionally generate a cuesheet or track list.
 Note that timestamps are only as accurate as the stream metadata — not exact
-audio positions.
+audio positions. The track markers simply reflect when the new-track metadata
+was received, assuming the stream plays back in real time.
 
-One peculiarity: the cuesheet standard supports at most 99 tracks. That’s fine
-for CD-like media, but long stream recordings can easily exceed this limit.
-Behavior depends on the playback program. As a workaround, this tool writes
-multiple cuesheets within the same file, each capped at 99 tracks but all
+Limitation of cuesheets: the cuesheet standard supports at most 99 tracks.
+That’s fine for CD-like media, but long stream recordings can easily exceed this
+limit. Behavior depends on the playback program. As a workaround, this tool
+writes multiple cuesheets within the same file, each capped at 99 tracks but all
 pointing to the same audio file.
 
 ## License

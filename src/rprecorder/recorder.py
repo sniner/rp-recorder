@@ -9,9 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
 
-import urllib3
-
-from rprecorder import config, cuesheet
+from rprecorder import chapters, config, cuesheet, shoutcast
 
 
 log = logging.getLogger(__name__)
@@ -29,19 +27,6 @@ class TrackInfo:
     cover: str
 
 
-# Example:
-# b"StreamTitle='Led Zeppelin - Kashmir';StreamUrl='http://img.radioparadise.com/covers/l/B000002JSN.jpg';\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-def _parse_metablock(meta: bytes) -> dict[str, str]:
-    def split_meta(metastr: str):
-        for item in re.split(r"(?<=');(?=\w+=)", metastr):
-            match = re.match(r"(\w+)='(.*)'", item)
-            if match:
-                yield match.group(1).lower(), match.group(2)
-
-    datastr = meta.rstrip(b"\x00").decode(encoding="utf-8", errors="replace")
-    return dict(split_meta(datastr))
-
-
 class RPRecorder:
     def __init__(
         self,
@@ -54,28 +39,15 @@ class RPRecorder:
         self.target_dir = target_dir
         self._cue_file: cuesheet.CueSheet | None = None
         self._list_file: pathlib.Path | None = None
+        self._chapter_file: chapters.MkaChapters | None = None
 
     def _channel_to_filename(self) -> str:
         s = re.sub(r"[^\w\d_\-\.\(\)\[\]]", "_", self.stream.channel.name)
         s = re.sub(r"__+", "_", s)
         return s
 
-    def _read_block(self, conn: urllib3.BaseHTTPResponse, blocksize: int) -> bytes:
-        data = b""
-        while len(data) < blocksize:
-            block = conn.read(blocksize - len(data))
-            data += block
-        logging.debug(
-            "[%s] read_block: %d bytes requested, %d bytes read",
-            self.stream.channel.name,
-            blocksize,
-            len(data),
-        )
-        return data
-
-    def _track_info(self, timepos: timedelta, metablock: bytes) -> TrackInfo:
-        metadata = _parse_metablock(metablock)
-        secs = int(timepos.total_seconds())
+    def _track_info(self, timepos: float, metadata: dict[str, str]) -> TrackInfo:
+        secs = int(timepos)
         h = secs // 3600
         m = (secs - h * 3600) // 60
         s = secs % 60
@@ -87,11 +59,13 @@ class RPRecorder:
         )
 
     def _write_metadata(
-        self, filepos: int, timepos: timedelta, metablock: bytes
+        self, filepos: int, timepos: float, meta: dict[str, str]
     ) -> None:
-        t = self._track_info(timepos, metablock)
+        t = self._track_info(timepos, meta)
         if self._cue_file:
             _ = self._cue_file.add_track(filepos, timepos, t.title, t.cover)
+        if self._chapter_file:
+            _ = self._chapter_file.add_track(timepos, t.title, t.cover)
         if self._list_file:
             with open(self._list_file, "a") as f:
                 print(f"{t.offset} -- {t.title}", file=f)
@@ -105,17 +79,7 @@ class RPRecorder:
         start_mode: CutMode | None = None,
         stop_mode: CutMode | None = None,
     ) -> None:
-        pool = urllib3.PoolManager()
-        conn = pool.request(
-            "GET", self.stream.url, preload_content=False, headers={"icy-metadata": "1"}
-        )
-        conn.auto_close = False  # pyright: ignore[reportAttributeAccessIssue]
-        if conn.status != 200:
-            conn.release_conn()
-            logging.error(
-                "[%s] Request failed, status: %s", self.stream.channel.name, conn.status
-            )
-            return
+        source = shoutcast.ShoutcastReader(self.stream)
 
         start_mode = start_mode or self.recording.start_mode
         stop_mode = stop_mode or self.recording.stop_mode
@@ -128,30 +92,28 @@ class RPRecorder:
         fname = f"{self._channel_to_filename()}_{ftime}.{self.stream.type or 'dat'}"
         audio_file = self.target_dir / fname
 
-        blocksize = int(conn.getheader("icy-metaint") or "0")
-        if blocksize <= 0:
-            logging.warning("[%s] No embedded metadata", self.stream.channel.name)
-        else:
-            logging.debug(
-                "[%s] Stream blocksize: %d bytes", self.stream.channel.name, blocksize
-            )
-
         if self.stream.cuesheet:
             self._cue_file = cuesheet.CueSheet(
                 performer=self.stream.channel.name,
+                audiofilename=fname,
                 path=audio_file.with_suffix(".cue"),
             )
         if self.stream.tracklist:
             self._list_file = audio_file.with_suffix(".txt")
+        if self.recording.matroska:
+            self._chapter_file = chapters.MkaChapters(
+                path=audio_file.with_suffix(".xml"),
+                edition_name=self.stream.channel.name,
+            )
 
         filepos: int = 0
         track_no: int = 0
-        record_start_time: datetime = start_time
+        record_start_time: float = 0.0
         meta_thread: threading.Thread | None = None
         try:
             with open(audio_file, "wb") as target:
-                while not conn.closed:
-                    blocktime = datetime.now()
+                for chunk in source.read_stream():
+                    blocktime = start_time + timedelta(seconds=chunk.timestamp)
                     if end_time and blocktime >= end_time:
                         if stop_mode == CutMode.IMMEDIATE:
                             break
@@ -165,9 +127,7 @@ class RPRecorder:
                                     self.stream.channel.name,
                                 )
                                 wants_to_stop = True
-                    audio = self._read_block(conn, blocksize)
-                    metalen = self._read_block(conn, 1)[0] * 16
-                    if metalen > 0:
+                    if chunk.meta_data:
                         track_no += 1
                         if wants_to_stop:
                             # Track changed, stop requested -> stop now
@@ -176,31 +136,37 @@ class RPRecorder:
                             if track_no > 1:
                                 # Skipped first (partial) track -> now we start recording
                                 recording_started = True
-                                record_start_time = blocktime
-                        meta = self._read_block(conn, metalen)
+                                record_start_time = chunk.timestamp
                         if recording_started:
-                            timepos = blocktime - record_start_time
+                            timepos = chunk.timestamp - record_start_time
                             meta_thread = threading.Thread(
                                 target=self._write_metadata,
-                                args=(filepos, timepos, meta),
+                                args=(filepos, timepos, chunk.meta_data),
                                 daemon=True,
                             ).start()
                         else:
-                            t = self._track_info(timedelta(0), meta)
+                            t = self._track_info(0, chunk.meta_data)
                             logging.info(
                                 "[%s] Skipping: %r",
                                 self.stream.channel.name,
                                 t.title,
                             )
                     if recording_started:
-                        filepos += target.write(audio)
+                        filepos += target.write(chunk.audio_data)
         finally:
-            conn.release_conn()
+            source.stop()
 
-        if meta_thread:
-            meta_thread.join()
-        if filepos == 0:
-            audio_file.unlink()
+            if self._chapter_file:
+                self._chapter_file.close()
+            if meta_thread:
+                meta_thread.join()
+            if filepos == 0:
+                if audio_file.exists():
+                    audio_file.unlink()
+
+            self._chapter_file = None
+            self._cue_file = None
+            self._list_file = None
 
 
 def create(
