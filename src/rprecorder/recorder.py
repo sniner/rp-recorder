@@ -5,12 +5,12 @@ import pathlib
 import re
 import threading
 
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
 
-from rprecorder import chapters, config, cuesheet, shoutcast
+from rprecorder import config, shoutcast, writer
 
+from .track import TrackInfo
 
 log = logging.getLogger(__name__)
 
@@ -18,13 +18,6 @@ log = logging.getLogger(__name__)
 class CutMode(StrEnum):
     IMMEDIATE = "immediate"
     ON_TRACK = "on-track"
-
-
-@dataclass
-class TrackInfo:
-    offset: str
-    title: str
-    cover: str
 
 
 class RPRecorder:
@@ -37,40 +30,52 @@ class RPRecorder:
         self.recording = recording
         self.stream = stream
         self.target_dir = target_dir
-        self._cue_file: cuesheet.CueSheet | None = None
-        self._list_file: pathlib.Path | None = None
-        self._chapter_file: chapters.MkaChapters | None = None
+        self._meta_writer: list[writer.Writer] = []
 
     def _channel_to_filename(self) -> str:
         s = re.sub(r"[^\w\d_\-\.\(\)\[\]]", "_", self.stream.channel.name)
         s = re.sub(r"__+", "_", s)
         return s
 
-    def _track_info(self, timepos: float, metadata: dict[str, str]) -> TrackInfo:
-        secs = int(timepos)
-        h = secs // 3600
-        m = (secs - h * 3600) // 60
-        s = secs % 60
-        tpos = f"{h}:{m:02d}:{s:02d}"
+    def _track_info(
+        self, filepos: int, timepos: float, meta: dict[str, str]
+    ) -> TrackInfo:
         return TrackInfo(
-            offset=tpos,
-            title=metadata.get("streamtitle", ""),
-            cover=metadata.get("streamurl", ""),
+            filepos=filepos,
+            timepos=timepos,
+            name=meta.get("streamtitle", ""),
+            cover=meta.get("streamurl", ""),
         )
 
-    def _write_metadata(
-        self, filepos: int, timepos: float, meta: dict[str, str]
-    ) -> None:
-        t = self._track_info(timepos, meta)
-        if self._cue_file:
-            _ = self._cue_file.add_track(filepos, timepos, t.title, t.cover)
-        if self._chapter_file:
-            _ = self._chapter_file.add_track(timepos, t.title, t.cover)
-        if self._list_file:
-            with open(self._list_file, "a") as f:
-                print(f"{t.offset} -- {t.title}", file=f)
+    def _create_writer(self, audiofile: pathlib.Path) -> list[writer.Writer]:
+        wr: list[writer.Writer] = []
+        if self.stream.cuesheet:
+            wr.append(
+                writer.CueSheetWriter(
+                    performer=self.stream.channel.name,
+                    audiofilename=audiofile.name,
+                    path=audiofile.with_suffix(".cue"),
+                )
+            )
+        if self.stream.tracklist:
+            wr.append(writer.TrackListWriter(path=audiofile.with_suffix(".txt")))
+        if self.recording.matroska:
+            wr.append(
+                writer.ChapterFileWriter(
+                    path=audiofile.with_suffix(".xml"),
+                    edition_name=self.stream.channel.name,
+                )
+            )
+        return wr
+
+    def _write_metadata(self, track: TrackInfo) -> None:
+        for w in self._meta_writer:
+            w.add_track(track)
         logging.info(
-            "[%s] Recording: %r @ %s", self.stream.channel.name, t.title, t.offset
+            "[%s] Recording: %r @ %s",
+            self.stream.channel.name,
+            track.name,
+            track.timepos_str(),
         )
 
     def record(
@@ -92,19 +97,7 @@ class RPRecorder:
         fname = f"{self._channel_to_filename()}_{ftime}.{self.stream.type or 'dat'}"
         audio_file = self.target_dir / fname
 
-        if self.stream.cuesheet:
-            self._cue_file = cuesheet.CueSheet(
-                performer=self.stream.channel.name,
-                audiofilename=fname,
-                path=audio_file.with_suffix(".cue"),
-            )
-        if self.stream.tracklist:
-            self._list_file = audio_file.with_suffix(".txt")
-        if self.recording.matroska:
-            self._chapter_file = chapters.MkaChapters(
-                path=audio_file.with_suffix(".xml"),
-                edition_name=self.stream.channel.name,
-            )
+        self._meta_writer = self._create_writer(audio_file)
 
         filepos: int = 0
         track_no: int = 0
@@ -138,35 +131,37 @@ class RPRecorder:
                                 recording_started = True
                                 record_start_time = chunk.timestamp
                         if recording_started:
-                            timepos = chunk.timestamp - record_start_time
+                            ti = self._track_info(
+                                filepos=filepos,
+                                timepos=chunk.timestamp - record_start_time,
+                                meta=chunk.meta_data,
+                            )
                             meta_thread = threading.Thread(
                                 target=self._write_metadata,
-                                args=(filepos, timepos, chunk.meta_data),
+                                args=(ti,),
                                 daemon=True,
                             ).start()
                         else:
-                            t = self._track_info(0, chunk.meta_data)
+                            ti = self._track_info(0, 0.0, chunk.meta_data)
                             logging.info(
                                 "[%s] Skipping: %r",
                                 self.stream.channel.name,
-                                t.title,
+                                ti.name,
                             )
                     if recording_started:
                         filepos += target.write(chunk.audio_data)
         finally:
             source.stop()
-
-            if self._chapter_file:
-                self._chapter_file.close()
             if meta_thread:
                 meta_thread.join()
+
+            for w in self._meta_writer:
+                w.close()
             if filepos == 0:
+                for w in self._meta_writer:
+                    w.remove()
                 if audio_file.exists():
                     audio_file.unlink()
-
-            self._chapter_file = None
-            self._cue_file = None
-            self._list_file = None
 
 
 def create(

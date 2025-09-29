@@ -2,25 +2,27 @@ from __future__ import annotations
 
 import logging
 import pathlib
-import re
 
 from datetime import timedelta
+
+from .common import TrackInfo, Writer
 
 
 log = logging.getLogger(__name__)
 
 
-class CueSheet:
+class CueSheetWriter(Writer):
     def __init__(
         self,
         performer: str,
         audiofilename: str,
         path: str | pathlib.Path,
     ):
+        super().__init__(path=path)
         self.performer: str = performer
         self.filename: str = audiofilename
-        self.path: pathlib.Path = pathlib.Path(path)
         self.track_no: int = 1
+        self._write_failed: int = 0
 
     @staticmethod
     def _time(pos: float | timedelta) -> str:
@@ -45,27 +47,26 @@ class CueSheet:
         )
         return item
 
-    def _track_entry(
-        self, filepos: int, timepos: float, track: str, cover_url: str
-    ) -> str:
+    def _track_entry(self, track: TrackInfo) -> str:
         if self.track_no > 99:
             self.track_no = 1
             prefix = "\n"
         else:
             prefix = ""
+
         try:
-            performer, title = re.split(r"\s+-\s+", track, maxsplit=1)
+            artist, title = track.artist_title()
         except ValueError:
-            performer = ""
+            artist = ""
             title = track
         item = "\n".join(
             [
                 f"  TRACK {self.track_no:02d} AUDIO",
                 f'    TITLE "{title}"',
-                f'    PERFORMER "{performer}"',
-                f"    INDEX 01 {self._time(timepos)}",
-                f"    REM FILEPOS {filepos}",
-                f'    REM COVER "{cover_url}"',
+                f'    PERFORMER "{artist}"',
+                f"    INDEX 01 {self._time(track.timepos)}",
+                f"    REM FILEPOS {track.filepos}",
+                f'    REM COVER "{track.cover}"',
             ]
         )
         if self.track_no == 1:
@@ -73,11 +74,15 @@ class CueSheet:
         self.track_no += 1
         return item
 
-    def add_track(
-        self, filepos: int, timepos: float, track: str, cover_url: str
-    ) -> str:
-        entry = self._track_entry(filepos, timepos, track, cover_url)
-        if self.path:
-            with open(self.path, "a") as f:
+    def add_track(self, track: TrackInfo) -> None:
+        entry = self._track_entry(track)
+        try:
+            with open(self.path, "a", encoding="utf-8") as f:
                 print(entry, file=f)
-        return entry
+        except (IOError, OSError) as e:
+            if self._write_failed == 0:
+                log.error("Writing cuesheet to '%s' failed: %s", self.path, e)
+            self._write_failed += 1
+
+    def close(self) -> None:
+        pass
