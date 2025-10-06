@@ -27,6 +27,9 @@ typeCheckingMode = "standard"
 venvPath = "."
 venv = ".venv"
 
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
+
 [dependency-groups]
 dev = [
     "freezegun>=1.5.5",
